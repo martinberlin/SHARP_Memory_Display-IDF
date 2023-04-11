@@ -1,6 +1,6 @@
 # Adafruit SHARP Memory Display [![Build Status](https://github.com/adafruit/Adafruit_SHARP_Memory_Display/workflows/Arduino%20Library%20CI/badge.svg)](https://github.com/adafruit/Adafruit_SHARP_Memory_Display/actions)
 
-This is the Adafruit SHARP Memory Display Arduino Library for Arduino
+This is a fork of the Adafruit SHARP Memory Display Arduino Library for Arduino, that is now working when compiled by **idf.py build**
 
 Tested and works great with the Adafruit SHARP Memory Display Breakout Board. Pick one up today in the adafruit shop!
  http://www.adafruit.com/products/1393
