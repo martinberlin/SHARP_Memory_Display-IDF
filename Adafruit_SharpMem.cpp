@@ -18,6 +18,7 @@ All text above, and the splash screen must be included in any redistribution
 
 #include "Adafruit_SharpMem.h"
 
+
 #ifndef _swap_int16_t
 #define _swap_int16_t(a, b)                                                    \
   {                                                                            \
@@ -34,28 +35,28 @@ All text above, and the splash screen must be included in any redistribution
     b = t;                                                                     \
   }
 #endif
-
 /**************************************************************************
-    Sharp Memory Display Connector
+    Sharp Memory Display Connector as detailed in Datashet
+    https://cdn.sparkfun.com/assets/d/e/8/9/7/LS013B7DH03_datasheet.pdf
     -----------------------------------------------------------------------
     Pin   Function        Notes
     ===   ==============  ===============================
-      1   VIN             3.3-5.0V (into LDO supply)
-      2   3V3             3.3V out
-      3   GND
-      4   SCLK            Serial Clock
-      5   MOSI            Serial Data Input
-      6   CS              Serial Chip Select
-      9   EXTMODE         COM Inversion Select (Low = SW clock/serial)
-      7   EXTCOMIN        External COM Inversion Signal
-      8   DISP            Display On(High)/Off(Low)
-
+      1   SCLK            Serial Clock
+      2   MOSI            Serial Data Input
+      3   CS              Serial Chip Select
+      4   EXTCOMIN        External COM Inversion Signal
+      5   DISP            Display On(High)/Off(Low)
+      6   3V3             3.3V out
+      7   VIN             3.3-5.0V (into LDO supply)
+      8   EXTMODE         COM Inversion Select (Low = SW clock/serial)
+      9   GND
+      10  VSSA  -> GND
  **************************************************************************/
-
 #define TOGGLE_VCOM                                                            \
   do {                                                                         \
     _sharpmem_vcom = _sharpmem_vcom ? 0x00 : SHARPMEM_BIT_VCOM;                \
   } while (0);
+
 
 /**
  * @brief Construct a new Adafruit_SharpMem object with software SPI
@@ -69,36 +70,17 @@ All text above, and the splash screen must be included in any redistribution
  * spi mode!)
  */
 Adafruit_SharpMem::Adafruit_SharpMem(uint8_t clk, uint8_t mosi, uint8_t cs,
-                                     uint16_t width, uint16_t height,
-                                     uint32_t freq)
+                                     uint16_t width, uint16_t height)
     : Adafruit_GFX(width, height) {
+  _clk = clk;
+  _mosi = mosi; 
   _cs = cs;
-  if (spidev) {
-    delete spidev;
-  }
-  spidev =
-      new Adafruit_SPIDevice(cs, clk, -1, mosi, freq, SPI_BITORDER_LSBFIRST);
-}
+  _width = width;
+  _height = height;
 
-/**
- * @brief Construct a new Adafruit_SharpMem object with hardware SPI
- *
- * @param theSPI Pointer to hardware SPI device you want to use
- * @param cs The display chip select pin - **NOTE** this is ACTIVE HIGH!
- * @param width The display width
- * @param height The display height
- * @param freq The SPI clock frequency desired
- */
-Adafruit_SharpMem::Adafruit_SharpMem(SPIClass *theSPI, uint8_t cs,
-                                     uint16_t width, uint16_t height,
-                                     uint32_t freq)
-    : Adafruit_GFX(width, height) {
-  _cs = cs;
-  if (spidev) {
-    delete spidev;
-  }
-  spidev = new Adafruit_SPIDevice(cs, freq, SPI_BITORDER_LSBFIRST, SPI_MODE0,
-                                  theSPI);
+  gpio_set_direction((gpio_num_t)_mosi, GPIO_MODE_OUTPUT);
+  gpio_set_direction((gpio_num_t)_clk, GPIO_MODE_OUTPUT);
+  gpio_set_direction((gpio_num_t)_cs, GPIO_MODE_OUTPUT);
 }
 
 /**
@@ -108,31 +90,64 @@ Adafruit_SharpMem::Adafruit_SharpMem(SPIClass *theSPI, uint8_t cs,
  * @return boolean true: success false: failure
  */
 boolean Adafruit_SharpMem::begin(void) {
-  if (!spidev->begin()) {
-    return false;
-  }
-  // this display is weird in that _cs is active HIGH not LOW like every other
-  // SPI device
-  digitalWrite(_cs, LOW);
-
+  
   // Set the vcom bit to a defined state
   _sharpmem_vcom = SHARPMEM_BIT_VCOM;
+ 
+  sharpmem_buffer = (uint8_t *)malloc((_width * _height) / 8);
 
-  sharpmem_buffer = (uint8_t *)malloc((WIDTH * HEIGHT) / 8);
-
-  if (!sharpmem_buffer)
+  if (!sharpmem_buffer) {
+    printf("Error: sharpmem_buffer was NOT allocated\n\n");
     return false;
+  }
 
-  setRotation(0);
+  // Initialize SPI
+    esp_err_t ret;
+    // MISO not used, only Master to Slave
+    spi_bus_config_t buscfg = {
+        .mosi_io_num= _mosi,
+        .miso_io_num= -1,
+        .sclk_io_num= _clk,
+        .quadwp_io_num=-1,
+        .quadhd_io_num=-1,
+        .max_transfer_sz=4094
+    };
+    // max_transfer_sz   4Kb is the defaut SPI transfer size if 0
+    // debug: 50000  0.5 Mhz so we can sniff the SPI commands with a Slave
+    uint16_t multiplier = 1000;
 
+    //Config Frequency and SS GPIO
+
+    //SPI_DEVICE_TXBIT_LSBFIRST
+    spi_device_interface_config_t devcfg = {
+        .mode = 0,  //SPI mode 0
+        .clock_speed_hz = 4 * multiplier * 1000, // Can be up to 4 Mhz
+        .spics_io_num = -1,                      // -1 == Do not control CS automatically!
+        .flags = (SPI_DEVICE_TXBIT_LSBFIRST | SPI_DEVICE_3WIRE),
+        .queue_size= 5
+    };
+    // DISABLED Callbacks pre_cb/post_cb. SPI does not seem to behave the same
+    // CS / DC GPIO states the usual way
+
+    //Initialize the SPI bus
+    ret = spi_bus_initialize(EPD_HOST, &buscfg, DMA_CHAN);
+    ESP_ERROR_CHECK(ret);
+
+    //Attach the EPD to the SPI bus
+    ret = spi_bus_add_device(EPD_HOST, &devcfg, &spi);
+    ESP_ERROR_CHECK(ret);
+    printf("SPI initialized. MOSI:%d CLK:%d CS:%d\n", _mosi, _clk, _cs);
+
+  // This display is weird in that _cs is active HIGH not LOW like every other SPI device
+  gpio_set_level((gpio_num_t)_cs, 0);
   return true;
 }
 
 // 1<<n is a costly operation on AVR -- table usu. smaller & faster
-static const uint8_t PROGMEM set[] = {1, 2, 4, 8, 16, 32, 64, 128},
-                             clr[] = {(uint8_t)~1,  (uint8_t)~2,  (uint8_t)~4,
-                                      (uint8_t)~8,  (uint8_t)~16, (uint8_t)~32,
-                                      (uint8_t)~64, (uint8_t)~128};
+static const uint8_t  set[] = {1, 2, 4, 8, 16, 32, 64, 128},
+                      clr[] = {(uint8_t)~1,  (uint8_t)~2,  (uint8_t)~4,
+                              (uint8_t)~8,  (uint8_t)~16, (uint8_t)~32,
+                              (uint8_t)~64, (uint8_t)~128};
 
 /**************************************************************************/
 /*!
@@ -154,22 +169,22 @@ void Adafruit_SharpMem::drawPixel(int16_t x, int16_t y, uint16_t color) {
   switch (rotation) {
   case 1:
     _swap_int16_t(x, y);
-    x = WIDTH - 1 - x;
+    x = _width - 1 - x;
     break;
   case 2:
-    x = WIDTH - 1 - x;
-    y = HEIGHT - 1 - y;
+    x = _width - 1 - x;
+    y = _height - 1 - y;
     break;
   case 3:
     _swap_int16_t(x, y);
-    y = HEIGHT - 1 - y;
+    y = _height - 1 - y;
     break;
   }
 
   if (color) {
-    sharpmem_buffer[(y * WIDTH + x) / 8] |= pgm_read_byte(&set[x & 7]);
+    sharpmem_buffer[(y * _width + x) / 8] |= set[x & 7]; // set[x & 7]
   } else {
-    sharpmem_buffer[(y * WIDTH + x) / 8] &= pgm_read_byte(&clr[x & 7]);
+    sharpmem_buffer[(y * _width + x) / 8] &= clr[x & 7]; // clr[x & 7]
   }
 }
 
@@ -192,20 +207,19 @@ uint8_t Adafruit_SharpMem::getPixel(uint16_t x, uint16_t y) {
   switch (rotation) {
   case 1:
     _swap_uint16_t(x, y);
-    x = WIDTH - 1 - x;
+    x = _width - 1 - x;
     break;
   case 2:
-    x = WIDTH - 1 - x;
-    y = HEIGHT - 1 - y;
+    x = _width - 1 - x;
+    y = _height - 1 - y;
     break;
   case 3:
     _swap_uint16_t(x, y);
-    y = HEIGHT - 1 - y;
+    y = _height - 1 - y;
     break;
   }
 
-  return sharpmem_buffer[(y * WIDTH + x) / 8] & pgm_read_byte(&set[x & 7]) ? 1
-                                                                           : 0;
+  return sharpmem_buffer[(y * _width + x) / 8] & set[x & 7] ? 1 : 0;
 }
 
 /**************************************************************************/
@@ -214,19 +228,22 @@ uint8_t Adafruit_SharpMem::getPixel(uint16_t x, uint16_t y) {
 */
 /**************************************************************************/
 void Adafruit_SharpMem::clearDisplay() {
-  memset(sharpmem_buffer, 0xff, (WIDTH * HEIGHT) / 8);
+  memset(sharpmem_buffer, 0xff, (_width * _height) / 8);
 
-  spidev->beginTransaction();
-  // Send the clear screen command rather than doing a HW refresh (quicker)
-  digitalWrite(_cs, HIGH);
-
-  uint8_t clear_data[2] = {(uint8_t)(_sharpmem_vcom | SHARPMEM_BIT_CLEAR),
-                           0x00};
-  spidev->transfer(clear_data, 2);
+  gpio_set_level((gpio_num_t)_cs, 1);
+  uint8_t clear_data[2] = {(uint8_t)(_sharpmem_vcom | SHARPMEM_BIT_CLEAR), 0x00};
+  esp_err_t ret;
+  spi_transaction_t t;
+  memset(&t, 0, sizeof(t));        //Zero out the transaction
+  t.length = sizeof(clear_data)*8; //Each data byte is 8 bits Einstein
+  t.tx_buffer = clear_data;
+  ret = spi_device_polling_transmit(spi, &t); // spi_device_polling_transmit
 
   TOGGLE_VCOM;
-  digitalWrite(_cs, LOW);
-  spidev->endTransaction();
+  gpio_set_level((gpio_num_t)_cs, 0);
+  
+  //printf("clearDisplay b1:%02x 2:%02x lenght:%d\n\n", clear_data[0], clear_data[1], t.length);
+  assert(ret==ESP_OK);
 }
 
 /**************************************************************************/
@@ -237,11 +254,16 @@ void Adafruit_SharpMem::clearDisplay() {
 void Adafruit_SharpMem::refresh(void) {
   uint16_t i, currentline;
 
-  spidev->beginTransaction();
-  // Send the write command
-  digitalWrite(_cs, HIGH);
+  esp_err_t ret;
+  spi_transaction_t t;
+  memset(&t, 0, sizeof(t));       //Zero out the transaction
 
-  spidev->transfer(_sharpmem_vcom | SHARPMEM_BIT_WRITECMD);
+  gpio_set_level((gpio_num_t)_cs, 1);
+  int vcom[1] = {_sharpmem_vcom | SHARPMEM_BIT_WRITECMD};
+  t.length = 8;                  //Each data byte is 8 bits
+  t.tx_buffer = vcom;
+  ret = spi_device_transmit(spi, &t);
+
   TOGGLE_VCOM;
 
   uint8_t bytes_per_line = WIDTH / 8;
@@ -257,15 +279,22 @@ void Adafruit_SharpMem::refresh(void) {
     memcpy(line + 1, sharpmem_buffer + i, bytes_per_line);
     // Send end of line
     line[bytes_per_line + 1] = 0x00;
-    // send it!
-    spidev->transfer(line, bytes_per_line + 2);
-  }
 
+    t.length = (bytes_per_line+2) *8; // bytes_per_line+2
+    t.tx_buffer = line;
+    ret = spi_device_transmit(spi, &t);
+    assert(ret==ESP_OK);
+  }
   // Send another trailing 8 bits for the last line
-  spidev->transfer(0x00);
-  digitalWrite(_cs, LOW);
-  spidev->endTransaction();
-}
+  int last_line[1] = {0x00};
+  t.length = 8;
+
+  t.tx_buffer = last_line;
+  ret = spi_device_transmit(spi, &t); // spi_device_polling_transmit
+  gpio_set_level((gpio_num_t)_cs, 0);
+
+  assert(ret==ESP_OK);
+  }
 
 /**************************************************************************/
 /*!
@@ -273,5 +302,5 @@ void Adafruit_SharpMem::refresh(void) {
 */
 /**************************************************************************/
 void Adafruit_SharpMem::clearDisplayBuffer() {
-  memset(sharpmem_buffer, 0xff, (WIDTH * HEIGHT) / 8);
+  memset(sharpmem_buffer, 0xFF, (_width * _height) / 8);
 }

@@ -8,10 +8,14 @@ Tested and works great with the Adafruit SHARP Memory Display Breakout Board. Pi
 Adafruit invests time and resources providing this open source code, please support Adafruit and open-source hardware by purchasing products from Adafruit!
 
 # Dependencies
-  These displays use SPI to communicate, 3 pins are required to  
-interface
 
-* [Adafruit GFX Library](https://github.com/adafruit/Adafruit-GFX-Library)
+  These displays use SPI to communicate, 3 pins are required to interface
+ 
+  Additionally please add in your components folder also my fork of Adafuit GFX as a submodule:
+
+* [Adafruit GFX Library for ESP-IDF](https://github.com/martinberlin/Adafruit-GFX-Library-ESP-IDF)
+
+    git submodule add https://github.com/martinberlin/Adafruit-GFX-Library-ESP-IDF.git components/adafruit-gfx
 
 # Contributing
 

@@ -19,16 +19,29 @@ All text above, and the splash screen must be included in any redistribution
 #define LIB_ADAFRUIT_SHARPMEM
 
 #include <Adafruit_GFX.h>
-#include <Adafruit_SPIDevice.h>
-#include <Arduino.h>
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-#if defined(RAMSTART) && defined(RAMEND) && ((RAMEND - RAMSTART) < 4096)
-#warning "Display may not work on devices with less than 4K RAM"
+#ifdef CONFIG_IDF_TARGET_ESP32
+    #define EPD_HOST    HSPI_HOST
+    #define DMA_CHAN    2
+#elif defined CONFIG_IDF_TARGET_ESP32S2
+    #define EPD_HOST    SPI2_HOST
+    #define DMA_CHAN    EPD_HOST
+#elif defined CONFIG_IDF_TARGET_ESP32S3
+    #define EPD_HOST    SPI2_HOST
+    #define DMA_CHAN    SPI_DMA_CH_AUTO
+#elif defined CONFIG_IDF_TARGET_ESP32C3
+    // chip only support spi dma channel auto-alloc
+    #define EPD_HOST    SPI2_HOST
+    #define DMA_CHAN    SPI_DMA_CH_AUTO
 #endif
 
-#define SHARPMEM_BIT_WRITECMD (0x01) // 0x80 in LSB format
-#define SHARPMEM_BIT_VCOM (0x02)     // 0x40 in LSB format
-#define SHARPMEM_BIT_CLEAR (0x04)    // 0x20 in LSB format
+#define SHARPMEM_BIT_WRITECMD (0x01) // 0x80 in LSB format otherwise 0x01
+#define SHARPMEM_BIT_VCOM (0x02)     // Sent now using SPI_DEVICE_TXBIT_LSBFIRST
+#define SHARPMEM_BIT_CLEAR (0x04)
 
 /**
  * @brief Class to control a Sharp memory display
@@ -36,10 +49,9 @@ All text above, and the splash screen must be included in any redistribution
  */
 class Adafruit_SharpMem : public Adafruit_GFX {
 public:
-  Adafruit_SharpMem(uint8_t clk, uint8_t mosi, uint8_t cs, uint16_t w = 96,
-                    uint16_t h = 96, uint32_t freq = 2000000);
-  Adafruit_SharpMem(SPIClass *theSPI, uint8_t cs, uint16_t w = 96,
-                    uint16_t h = 96, uint32_t freq = 2000000);
+  Adafruit_SharpMem(uint8_t clk, uint8_t mosi, uint8_t cs, uint16_t w = 128,
+                    uint16_t h = 128);
+
   boolean begin();
   void drawPixel(int16_t x, int16_t y, uint16_t color);
   uint8_t getPixel(uint16_t x, uint16_t y);
@@ -48,9 +60,17 @@ public:
   void clearDisplayBuffer();
 
 private:
-  Adafruit_SPIDevice *spidev = NULL;
+  spi_device_handle_t spi;
+
   uint8_t *sharpmem_buffer = NULL;
+  // IOs
+  uint8_t _clk;
+  uint8_t _mosi;
   uint8_t _cs;
+
+  uint8_t _width = 128;
+  uint8_t _height = 128;
+  
   uint8_t _sharpmem_vcom;
 };
 
