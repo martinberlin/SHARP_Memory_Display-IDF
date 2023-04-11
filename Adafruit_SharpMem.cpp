@@ -304,3 +304,50 @@ void Adafruit_SharpMem::refresh(void) {
 void Adafruit_SharpMem::clearDisplayBuffer() {
   memset(sharpmem_buffer, 0xFF, (_width * _height) / 8);
 }
+
+uint8_t Adafruit_SharpMem::_unicodeEasy(uint8_t c) {
+  if (c<191 && c>131 && c!=176) { // 176 is °W 
+    c+=64;
+  }
+  return c;
+}
+
+void Adafruit_SharpMem::print(const std::string& text){
+   for(auto c : text) {
+     if (c==195 || c==194) continue; // Skip to next letter
+     c = _unicodeEasy(c);
+     write(uint8_t(c));
+   }
+}
+
+void Adafruit_SharpMem::println(const std::string& text){
+   for(auto c : text) {
+     if (c==195 || c==194) continue; // Skip to next letter
+
+     // _unicodeEasy will just sum 64 and get the right character, should be faster and cover more chars
+     c = _unicodeEasy(c);
+     //c = _unicodePerChar(c); // _unicodePerChar has more control since they are only hand-picked chars
+     write(uint8_t(c));
+   }
+   write(10); // newline
+}
+
+/**
+ * @brief Similar to printf
+ * Note that buffer needs to end with null character
+ * @param format 
+ * @param ... va_list
+ */
+void Adafruit_SharpMem::printerf(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    char max_buffer[1024];
+    int size = vsnprintf(max_buffer, sizeof max_buffer, format, args);
+    va_end(args);
+
+    if (size < sizeof(max_buffer)) {
+      print(std::string(max_buffer));
+    } else {
+      ESP_LOGE("Epd::printerf", "max_buffer out of range. Increase max_buffer!");
+    }
+}

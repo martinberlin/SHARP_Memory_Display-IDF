@@ -23,6 +23,9 @@ All text above, and the splash screen must be included in any redistribution
 #include "driver/spi_master.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <string>
+#include <string.h>
+#include "esp_log.h"
 
 #ifdef CONFIG_IDF_TARGET_ESP32
     #define EPD_HOST    HSPI_HOST
@@ -58,6 +61,9 @@ public:
   void clearDisplay();
   void refresh(void);
   void clearDisplayBuffer();
+  void print(const std::string& text);
+  void println(const std::string& text);
+  void printerf(const char *format, ...);
 
 private:
   spi_device_handle_t spi;
@@ -72,6 +78,8 @@ private:
   uint8_t _height = 128;
   
   uint8_t _sharpmem_vcom;
+
+  uint8_t _unicodeEasy(uint8_t c);
 };
 
 #endif
