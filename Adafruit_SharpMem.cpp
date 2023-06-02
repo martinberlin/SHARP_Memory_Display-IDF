@@ -80,6 +80,8 @@ Adafruit_SharpMem::Adafruit_SharpMem(uint8_t clk, uint8_t mosi, uint8_t cs,
 
   gpio_set_direction((gpio_num_t)_mosi, GPIO_MODE_OUTPUT);
   gpio_set_direction((gpio_num_t)_clk, GPIO_MODE_OUTPUT);
+  // With some GPIOs CS needs a Reset (Discovering this turned some new hairs completely white)
+  gpio_reset_pin((gpio_num_t)_cs);
   gpio_set_direction((gpio_num_t)_cs, GPIO_MODE_OUTPUT);
 }
 
