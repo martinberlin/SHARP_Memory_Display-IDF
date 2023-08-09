@@ -2,6 +2,9 @@
 
 This is a fork of the Adafruit SHARP Memory Display Arduino Library for Arduino, that is now working when compiled by **idf.py build**
 
+IMPORTANT: this fork works with the 128x128 LCD but not with the 240x400 still didn't found why.If you know why please open an ossue or make a pull-request to fix it
+ thanks for your help!
+ 
 Tested and works great with the Adafruit SHARP Memory Display Breakout Board. Pick one up today in the adafruit shop!
  http://www.adafruit.com/products/1393
 
