@@ -74,8 +74,8 @@ private:
   uint8_t _mosi;
   uint8_t _cs;
 
-  uint8_t _width = 128;
-  uint8_t _height = 128;
+  uint16_t _width = 128;
+  uint16_t _height = 128;
   
   uint8_t _sharpmem_vcom;
 
