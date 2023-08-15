@@ -305,7 +305,7 @@ void Adafruit_SharpMem::refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint
     refresh();
     return;
   }
-  uint16_t i, currentline;
+  uint16_t i, bufferPointer;
 
   esp_err_t ret;
   spi_transaction_t t;
@@ -321,17 +321,17 @@ void Adafruit_SharpMem::refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint
 
   uint8_t bytes_per_line = WIDTH / 8;
   
-  uint16_t start_byte = y1 * bytes_per_line;
-  uint16_t end_byte   = y2 * bytes_per_line;
+  uint16_t start_line = y1;
+  uint16_t end_line   = y2;
 
-  for (i = start_byte; i < end_byte; i += bytes_per_line) {
+  for (i = start_line; i < end_line; i += bytes_per_line) {
     uint8_t line[bytes_per_line + 2];
 
     // Send address byte
-    currentline = i-1;
-    line[0] = currentline;
+    line[0] = i;
+    bufferPointer = i * bytes_per_line;
     // copy over this line
-    memcpy(line + 1, sharpmem_buffer + i, bytes_per_line);
+    memcpy(line + 1, sharpmem_buffer + bufferPointer, bytes_per_line);
     // Send end of line
     line[bytes_per_line + 1] = 0x00;
 
