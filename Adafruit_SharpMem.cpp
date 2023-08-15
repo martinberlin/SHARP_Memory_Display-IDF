@@ -123,7 +123,7 @@ boolean Adafruit_SharpMem::begin(void) {
     //SPI_DEVICE_TXBIT_LSBFIRST
     spi_device_interface_config_t devcfg = {
         .mode = 0,  //SPI mode 0
-        .clock_speed_hz = 4 * multiplier * 1000, // Can be up to 4 Mhz
+        .clock_speed_hz = 2 * multiplier * 1000, // Can be up to 4 Mhz
         .spics_io_num = -1,                      // -1 == Do not control CS automatically!
         .flags = (SPI_DEVICE_TXBIT_LSBFIRST | SPI_DEVICE_3WIRE),
         .queue_size= 5
@@ -275,6 +275,60 @@ void Adafruit_SharpMem::refresh(void) {
 
     // Send address byte
     currentline = ((i + 1) / (WIDTH / 8)) + 1;
+    line[0] = currentline;
+    // copy over this line
+    memcpy(line + 1, sharpmem_buffer + i, bytes_per_line);
+    // Send end of line
+    line[bytes_per_line + 1] = 0x00;
+
+    t.length = (bytes_per_line+2) *8; // bytes_per_line+2
+    t.tx_buffer = line;
+    ret = spi_device_transmit(spi, &t);
+    assert(ret==ESP_OK);
+  }
+  // Send another trailing 8 bits for the last line
+  int last_line[1] = {0x00};
+  t.length = 8;
+
+  t.tx_buffer = last_line;
+  ret = spi_device_transmit(spi, &t); // spi_device_polling_transmit
+  gpio_set_level((gpio_num_t)_cs, 0);
+
+  assert(ret==ESP_OK);
+  }
+
+void Adafruit_SharpMem::refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2) {
+  // If it's whole display skip it
+  
+  if (x1 == 0 && y1 == 0) {
+    printf("WIDTH %d H %d\n", WIDTH, HEIGHT);
+    refresh();
+    return;
+  }
+  uint16_t i, currentline;
+
+  esp_err_t ret;
+  spi_transaction_t t;
+  memset(&t, 0, sizeof(t));       //Zero out the transaction
+
+  gpio_set_level((gpio_num_t)_cs, 1);
+  int vcom[1] = {_sharpmem_vcom | SHARPMEM_BIT_WRITECMD};
+  t.length = 8;                  //Each data byte is 8 bits
+  t.tx_buffer = vcom;
+  ret = spi_device_transmit(spi, &t);
+
+  TOGGLE_VCOM;
+
+  uint8_t bytes_per_line = WIDTH / 8;
+  
+  uint16_t start_byte = y1 * bytes_per_line;
+  uint16_t end_byte   = y2 * bytes_per_line;
+
+  for (i = start_byte; i < end_byte; i += bytes_per_line) {
+    uint8_t line[bytes_per_line + 2];
+
+    // Send address byte
+    currentline = i-1;
     line[0] = currentline;
     // copy over this line
     memcpy(line + 1, sharpmem_buffer + i, bytes_per_line);
