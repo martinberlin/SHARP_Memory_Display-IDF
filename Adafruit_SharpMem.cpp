@@ -165,8 +165,6 @@ static const uint8_t  set[] = {1, 2, 4, 8, 16, 32, 64, 128},
 */
 /**************************************************************************/
 void Adafruit_SharpMem::drawPixel(int16_t x, int16_t y, uint16_t color) {
-  if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height))
-    return;
 
   switch (rotation) {
   case 1:
@@ -182,7 +180,8 @@ void Adafruit_SharpMem::drawPixel(int16_t x, int16_t y, uint16_t color) {
     y = _height - 1 - y;
     break;
   }
-
+  // Uncomment if it does work well with rotation
+  //if ((x < 0) || (x >= _width) || (y < 0) || (y >= _height)) return;
   if (color) {
     sharpmem_buffer[(y * _width + x) / 8] |= set[x & 7]; // set[x & 7]
   } else {
