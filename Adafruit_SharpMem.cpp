@@ -286,6 +286,7 @@ void Adafruit_SharpMem::refresh(void) {
     ret = spi_device_transmit(spi, &t);
     assert(ret==ESP_OK);
   }
+
   // Send another trailing 8 bits for the last line
   int last_line[1] = {0x00};
   t.length = 8;
@@ -299,12 +300,11 @@ void Adafruit_SharpMem::refresh(void) {
 
 void Adafruit_SharpMem::refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2) {
   // If it's whole display skip it
-  
-  if (x1 == 0 && y1 == 0) {
+  /* if (x1 == 0 && y1 == 0 && y2 == HEIGHT-1) {
     printf("WIDTH %d H %d\n", WIDTH, HEIGHT);
     refresh();
     return;
-  }
+  } */
   uint16_t i, bufferPointer;
 
   esp_err_t ret;
@@ -320,11 +320,8 @@ void Adafruit_SharpMem::refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint
   TOGGLE_VCOM;
 
   uint8_t bytes_per_line = WIDTH / 8;
-  
-  uint16_t start_line = y1;
-  uint16_t end_line   = y2;
 
-  for (i = start_line; i < end_line; i += bytes_per_line) {
+  for (i = y1; i < y2; i ++) {
     uint8_t line[bytes_per_line + 2];
 
     // Send address byte
