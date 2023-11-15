@@ -60,6 +60,8 @@ public:
   uint8_t getPixel(uint16_t x, uint16_t y);
   void clearDisplay();
   void refresh(void);
+  void refreshLines(uint16_t x1, uint16_t x2, uint16_t y1, uint16_t y2);
+  
   void clearDisplayBuffer();
   void print(const std::string& text);
   void println(const std::string& text);
